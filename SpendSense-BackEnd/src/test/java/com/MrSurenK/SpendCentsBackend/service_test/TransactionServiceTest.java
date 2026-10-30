@@ -12,6 +12,7 @@ import com.MrSurenK.SpendCentsBackend.service.JwtService;
 import com.MrSurenK.SpendCentsBackend.service.TransactionService;
 
 import com.MrSurenK.SpendCentsBackend.util.DateTimeFormats;
+import com.MrSurenK.SpendCentsBackend.util.RecurringDateCalculator;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -25,12 +26,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 @Slf4j
@@ -67,6 +72,7 @@ public class TransactionServiceTest {
 
             BigDecimal amount = new BigDecimal("100.00");
             String remarks = "Test new transaction record added.";
+            String title = "Test transaction";
             LocalDate date  = DateTimeFormats.formatStringDate("17-07-2025");
             Category catObject = new Category();
             catObject.setId(3L);
@@ -74,6 +80,7 @@ public class TransactionServiceTest {
 
             transactionRequestDto.setAmount(amount);
             transactionRequestDto.setRemarks(remarks);
+            transactionRequestDto.setTitle(title);
             transactionRequestDto.setRecurring(false);
             transactionRequestDto.setDate(date);
             transactionRequestDto.setCategoryId(3L);
@@ -100,8 +107,34 @@ public class TransactionServiceTest {
             assertEquals(transactionRequestDto.getCategoryId(),transaction.getCategory().getId());
             assertEquals(transactionRequestDto.getDate(),transaction.getTransactionDate());
             assertEquals(transactionRequestDto.getRecurring(),transaction.getRecurring());
+            assertEquals(transactionRequestDto.getTitle(),transaction.getTitle());
             assertEquals(transactionRequestDto.getRemarks(),transaction.getRemarks());
             assertEquals(dummyAccount,transaction.getUserAccount());
+        }
+
+        @Test
+        @DisplayName("Recurring transaction is created with its first due date")
+        void addRecurringTransaction_setsFirstNextDueDate() {
+            TransactionRequestDto dto = new TransactionRequestDto();
+            dto.setAmount(new BigDecimal("100.00"));
+            dto.setTitle("Monthly Rent");
+            dto.setRecurring(true);
+            dto.setDate(LocalDate.of(2026, 1, 31));
+            dto.setCategoryId(3L);
+
+            UserAccount user = new UserAccount();
+            user.setId(1);
+            Category category = new Category();
+            category.setId(3L);
+
+            when(categoryRepo.getValidCat(1, 3L)).thenReturn(Optional.of(category));
+            when(userAccountRepo.findById(1)).thenReturn(Optional.of(user));
+
+            Transaction transaction = transactionService.addItem(dto, 1);
+
+            assertTrue(transaction.getRecurring());
+            //31 Jan has no equivalent in February, so the first due date is clamped
+            assertEquals(LocalDate.of(2026, 2, 28), transaction.getNextDueDate());
         }
 
         @Test
@@ -150,6 +183,8 @@ public class TransactionServiceTest {
             assertEquals(editForm.getCategoryId(), testTransaction.getCategory().getId());
             assertEquals(editForm.getRecurring(),testTransaction.getRecurring());
             assertEquals(editForm.getDate(), testTransaction.getTransactionDate());
+            assertEquals(RecurringDateCalculator.firstDueDate(editForm.getDate()),
+                    testTransaction.getNextDueDate());
             assertNotEquals(testTransaction.getLastUpdated(),LocalDateTime
                     .of(2025, 07, 20,10,5));
 
@@ -157,56 +192,258 @@ public class TransactionServiceTest {
         }
 
         @Test
+        @DisplayName("Turning recurring on without changing the date initialises nextDueDate")
+        void editTransaction_turningRecurringOnSetsNextDueDate() {
+            LocalDate txnDate = LocalDate.of(2026, 1, 15);
+            UUID id = UUID.randomUUID();
+
+            Transaction txn = new Transaction();
+            txn.setId(id);
+            txn.setTransactionDate(txnDate);
+            txn.setRecurring(false);
+            txn.setNextDueDate(null);
+            txn.setLastUpdated(LocalDateTime.now());
+
+            EditTransactionDto dto = new EditTransactionDto();
+            dto.setRecurring(true);
+
+            when(transactionRepo.findById(id)).thenReturn(Optional.of(txn));
+
+            transactionService.editTransaction(dto, 1, id);
+
+            assertTrue(txn.getRecurring());
+            assertEquals(RecurringDateCalculator.firstDueDate(txnDate), txn.getNextDueDate());
+            verify(transactionRepo).save(txn);
+        }
+
+        @Test
+        @DisplayName("Turning recurring off clears nextDueDate")
+        void editTransaction_turningRecurringOffClearsNextDueDate() {
+            UUID id = UUID.randomUUID();
+
+            Transaction txn = new Transaction();
+            txn.setId(id);
+            txn.setTransactionDate(LocalDate.of(2026, 1, 15));
+            txn.setRecurring(true);
+            txn.setNextDueDate(LocalDate.of(2026, 2, 15));
+            txn.setLastUpdated(LocalDateTime.now());
+
+            EditTransactionDto dto = new EditTransactionDto();
+            dto.setRecurring(false);
+
+            when(transactionRepo.findById(id)).thenReturn(Optional.of(txn));
+
+            transactionService.editTransaction(dto, 1, id);
+
+            assertFalse(txn.getRecurring());
+            assertNull(txn.getNextDueDate());
+        }
+
+        @Test
+        @DisplayName("Changing the date of a recurring transaction resets its schedule")
+        void editTransaction_changingDateOfRecurringResetsNextDueDate() {
+            UUID id = UUID.randomUUID();
+            LocalDate newDate = LocalDate.of(2026, 3, 31);
+
+            Transaction txn = new Transaction();
+            txn.setId(id);
+            txn.setTransactionDate(LocalDate.of(2026, 1, 31));
+            txn.setRecurring(true);
+            txn.setNextDueDate(LocalDate.of(2026, 2, 28));
+            txn.setLastUpdated(LocalDateTime.now());
+
+            EditTransactionDto dto = new EditTransactionDto();
+            dto.setDate(newDate);
+
+            when(transactionRepo.findById(id)).thenReturn(Optional.of(txn));
+
+            transactionService.editTransaction(dto, 1, id);
+
+            assertEquals(newDate, txn.getTransactionDate());
+            assertEquals(RecurringDateCalculator.firstDueDate(newDate), txn.getNextDueDate());
+        }
+
+        @Test
+        @DisplayName("Unrelated edits do not reset an existing recurring schedule")
+        void editTransaction_unrelatedEditKeepsNextDueDate() {
+            UUID id = UUID.randomUUID();
+            LocalDate existingDueDate = LocalDate.of(2026, 5, 15);
+
+            Transaction txn = new Transaction();
+            txn.setId(id);
+            txn.setTransactionDate(LocalDate.of(2026, 4, 15));
+            txn.setRecurring(true);
+            txn.setNextDueDate(existingDueDate);
+            txn.setLastUpdated(LocalDateTime.now());
+
+            EditTransactionDto dto = new EditTransactionDto();
+            dto.setTitle("Updated title");
+
+            when(transactionRepo.findById(id)).thenReturn(Optional.of(txn));
+
+            transactionService.editTransaction(dto, 1, id);
+
+            assertEquals("Updated title", txn.getTitle());
+            assertEquals(existingDueDate, txn.getNextDueDate());
+        }
+
+        @Test
+        @DisplayName("Recurring generation copies all fields and advances the due date")
         void generateNewRecurringTransactions_shouldCreateCopyAndUpdateNextDueDate() {
-        // Arrange
-        LocalDate today = LocalDate.now();
+            // Arrange
+            LocalDate today = LocalDate.now();
+            LocalDate anchor = today.minusMonths(1);
 
-        Transaction template = new Transaction();
-        template.setId(java.util.UUID.randomUUID());
-        template.setAmount(new BigDecimal("100.00"));
-        template.setCategory(new Category());
-        template.setUserAccount(new UserAccount());
-        template.setTransactionDate(today.minusMonths(1));
-        template.setRecurring(true);
-        template.setNextDueDate(today);
-        template.setRemarks("Monthly Rent");
-        template.setLastUpdated(LocalDateTime.now());
+            Transaction template = new Transaction();
+            template.setId(UUID.randomUUID());
+            template.setAmount(new BigDecimal("100.00"));
+            template.setTitle("Monthly Rent");
+            template.setCategory(new Category());
+            template.setUserAccount(new UserAccount());
+            template.setTransactionDate(anchor);
+            template.setRecurring(true);
+            template.setNextDueDate(today);
+            template.setRemarks("Monthly Rent");
+            template.setLastUpdated(LocalDateTime.now());
 
-        when(transactionRepo.findByRecurringTrueAndNextDueDate(today))
-                .thenReturn(List.of(template));
+            when(transactionRepo.findRecurringTransactionsDueBy(today))
+                    .thenReturn(List.of(template));
 
-        // Act
-        transactionService.generateNewRecurringTransactions();
+            // Act
+            transactionService.generateNewRecurringTransactions();
 
-        // Assert: template should be updated
-        assert template.getNextDueDate().equals(today.plusMonths(1));
+            // Assert
+            verify(transactionRepo).findRecurringTransactionsDueBy(today);
 
-        // Verify repo interactions
-        verify(transactionRepo, times(1)).findByRecurringTrueAndNextDueDate(today);
+            ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
+            verify(transactionRepo, times(2)).save(captor.capture());
 
-        // Capture the saved transactions
-        ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
-        verify(transactionRepo, times(2)).save(captor.capture());
+            Transaction savedCopy = captor.getAllValues().stream()
+                    .filter(t -> !t.getRecurring())
+                    .findFirst()
+                    .orElseThrow();
 
-        List<Transaction> savedTransactions = captor.getAllValues();
+            Transaction savedTemplate = captor.getAllValues().stream()
+                    .filter(Transaction::getRecurring)
+                    .findFirst()
+                    .orElseThrow();
 
-        // One should be the copy, one should be the template
-        Transaction savedCopy = savedTransactions.stream()
-                .filter(t -> !t.getRecurring()) // the generated copy
-                .findFirst()
-                .orElseThrow();
+            assertEquals(template, savedCopy.getParentTransaction());
+            assertEquals(template.getTitle(), savedCopy.getTitle());
+            assertEquals(template.getAmount(), savedCopy.getAmount());
+            assertEquals(template.getCategory(), savedCopy.getCategory());
+            assertEquals(template.getUserAccount(), savedCopy.getUserAccount());
+            assertEquals(template.getRemarks(), savedCopy.getRemarks());
+            assertEquals(today, savedCopy.getTransactionDate());
+            assertFalse(savedCopy.getRecurring());
+            assertEquals(RecurringDateCalculator.nextMonthlyDueDate(anchor, today),
+                    savedTemplate.getNextDueDate());
+            assertTrue(savedTemplate.getNextDueDate().isAfter(today));
+        }
 
-        Transaction savedTemplate = savedTransactions.stream()
-                .filter(Transaction::getRecurring) // the updated template
-                .findFirst()
-                .orElseThrow();
+        @Test
+        @DisplayName("Recurring generation catches up every missed month")
+        void generateNewRecurringTransactions_shouldCatchUpMissedMonths() {
+            // Arrange
+            LocalDate today = LocalDate.now();
+            LocalDate anchor = today.minusMonths(3);
+            LocalDate firstDueDate = RecurringDateCalculator.firstDueDate(anchor);
 
-        // Validate copy
-        assert savedCopy.getTransactionDate().equals(today);
-        assert savedCopy.getParentTransaction().equals(template);
+            List<LocalDate> expectedDates = new ArrayList<>();
+            LocalDate dueDate = firstDueDate;
+            while (!dueDate.isAfter(today)) {
+                expectedDates.add(dueDate);
+                dueDate = RecurringDateCalculator.nextMonthlyDueDate(anchor, dueDate);
+            }
 
-        // Validate template
-        assert savedTemplate.getNextDueDate().equals(today.plusMonths(1));
+            Transaction template = new Transaction();
+            template.setId(UUID.randomUUID());
+            template.setAmount(new BigDecimal("42.00"));
+            template.setTitle("Subscription");
+            template.setCategory(new Category());
+            template.setUserAccount(new UserAccount());
+            template.setTransactionDate(anchor);
+            template.setRecurring(true);
+            template.setNextDueDate(firstDueDate);
+            template.setLastUpdated(LocalDateTime.now());
+
+            when(transactionRepo.findRecurringTransactionsDueBy(today))
+                    .thenReturn(List.of(template));
+
+            // Act
+            transactionService.generateNewRecurringTransactions();
+
+            // Assert
+            ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
+            verify(transactionRepo, times(expectedDates.size() + 1)).save(captor.capture());
+
+            List<Transaction> copies = captor.getAllValues().stream()
+                    .filter(t -> !t.getRecurring())
+                    .toList();
+
+            assertEquals(expectedDates.size(), copies.size());
+            assertEquals(expectedDates, copies.stream()
+                    .map(Transaction::getTransactionDate)
+                    .toList());
+
+            Transaction savedTemplate = captor.getAllValues().stream()
+                    .filter(Transaction::getRecurring)
+                    .findFirst()
+                    .orElseThrow();
+            assertEquals(dueDate, savedTemplate.getNextDueDate());
+            assertTrue(savedTemplate.getNextDueDate().isAfter(today));
+        }
+
+        @Test
+        @DisplayName("Recurring generation repairs a legacy row with no nextDueDate")
+        void generateNewRecurringTransactions_shouldRepairMissingNextDueDate() {
+            LocalDate today = LocalDate.now();
+            LocalDate anchor = today.minusMonths(1);
+            LocalDate firstDueDate = RecurringDateCalculator.firstDueDate(anchor);
+
+            Transaction template = new Transaction();
+            template.setId(UUID.randomUUID());
+            template.setAmount(new BigDecimal("15.00"));
+            template.setTitle("Legacy recurring");
+            template.setCategory(new Category());
+            template.setUserAccount(new UserAccount());
+            template.setTransactionDate(anchor);
+            template.setRecurring(true);
+            template.setNextDueDate(null);
+            template.setLastUpdated(LocalDateTime.now());
+
+            when(transactionRepo.findRecurringTransactionsDueBy(today))
+                    .thenReturn(List.of(template));
+
+            transactionService.generateNewRecurringTransactions();
+
+            ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
+            verify(transactionRepo, atLeast(2)).save(captor.capture());
+
+            List<Transaction> copies = captor.getAllValues().stream()
+                    .filter(t -> !t.getRecurring())
+                    .toList();
+
+            assertFalse(copies.isEmpty());
+            assertEquals(firstDueDate, copies.get(0).getTransactionDate());
+            assertEquals(template.getTitle(), copies.get(0).getTitle());
+
+            Transaction savedTemplate = captor.getAllValues().stream()
+                    .filter(Transaction::getRecurring)
+                    .findFirst()
+                    .orElseThrow();
+            assertTrue(savedTemplate.getNextDueDate().isAfter(today));
+        }
+
+        @Test
+        @DisplayName("Recurring generation does nothing when no template is due")
+        void generateNewRecurringTransactions_shouldDoNothingWhenNothingIsDue() {
+            LocalDate today = LocalDate.now();
+            when(transactionRepo.findRecurringTransactionsDueBy(today)).thenReturn(List.of());
+
+            transactionService.generateNewRecurringTransactions();
+
+            verify(transactionRepo, never()).save(any(Transaction.class));
         }
 
 

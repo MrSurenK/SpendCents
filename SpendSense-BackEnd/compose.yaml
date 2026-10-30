@@ -2,6 +2,7 @@ services:
   app:
     build: .
     image: spendcents-app
+    container_name: spendcents-app #ensures container name does not take up normalized project name
     profiles: ["prod"]
     depends_on:
       - mysql

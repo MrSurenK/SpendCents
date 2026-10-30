@@ -14,17 +14,21 @@ import NewCatModal from "../../../components/modal/NewCatModal";
 
 //ToDo: fix the date formating before submitting form
 
+//Single source of truth for a blank form, used on mount and after a successful submit
+const getEmptyForm = (): NewTransactionRequest => ({
+  amount: 0,
+  title: "",
+  remarks: "",
+  recurring: false,
+  date: new Date().toISOString().slice(0, 10),
+  categoryId: 0,
+});
+
 export default function NewTxn() {
   //State to manage form information
 
-  const [newTxnForm, setNewTxnForm] = useState<NewTransactionRequest>({
-    amount: 0,
-    title: "",
-    remarks: "",
-    recurring: false,
-    date: new Date().toISOString().slice(0, 10),
-    categoryId: 0,
-  });
+  const [newTxnForm, setNewTxnForm] =
+    useState<NewTransactionRequest>(getEmptyForm);
 
   const [transactionType, setTransactionType] = useState<TransactionType>();
 
@@ -73,6 +77,9 @@ export default function NewTxn() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    //Capture the form element before awaiting; e.currentTarget is null after the handler returns
+    const form = e.currentTarget;
+
     console.log("Form before submit: ", newTxnForm);
 
     //Check if all fields have been filled
@@ -92,9 +99,15 @@ export default function NewTxn() {
         date: formatToDdMmYyyy(newTxnForm.date),
       };
       await addNewTxn(payload).unwrap(); //call add txn api
-      if (fillAllFieldsMsg) {
-        setFillAllFieldsMsg(null);
-      }
+
+      //Reset the form after a successful submit so the user can add the next transaction.
+      //form.reset() clears the uncontrolled inputs (amount, title, remarks, recurring radio),
+      //while the state reset clears the controlled fields (date, category) and app state.
+      form.reset();
+      setNewTxnForm(getEmptyForm());
+      setTransactionType(undefined);
+      setFillAllFieldsMsg(null);
+
       setShowModal(true);
     } catch (error) {
       console.error("Failed to create transaction", error);
@@ -213,6 +226,7 @@ export default function NewTxn() {
                 name="date"
                 type="date"
                 size="md"
+                value={newTxnForm.date}
                 onChange={handleInputChange}
               />
             </div>

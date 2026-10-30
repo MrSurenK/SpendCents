@@ -12,7 +12,7 @@ public class RecurringTransactionScheduler {
     public RecurringTransactionScheduler(TransactionService transactionService){
         this.transactionService = transactionService;
     }
-    //Runs everyday at midnight
+    //Runs everyday at midnight (scheduling is enabled in SpendCentsBackEndApplication)
     @Scheduled(cron = "0 0 0 * * *")
     public void run(){
         transactionService.generateNewRecurringTransactions();

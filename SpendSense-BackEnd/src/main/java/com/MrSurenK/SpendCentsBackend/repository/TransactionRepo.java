@@ -34,7 +34,16 @@ public interface TransactionRepo extends JpaRepository<Transaction, UUID>, JpaSp
     Page<Transaction> findAllByUserAccountIdAndTransactionDateBetween(int userId,LocalDate startDate, LocalDate endDate,
                                                                       Pageable page);
 
-    List<Transaction> findByRecurringTrueAndNextDueDate(LocalDate date);
+    /**
+     * Recurring templates whose next occurrence is due today or earlier.
+     * Using {@code <=} (rather than equality) lets the daily job catch up on
+     * occurrences missed while the application was down. Rows with a null due
+     * date are included so legacy rows created before the nextDueDate fix are
+     * repaired on the next run.
+     */
+    @Query("SELECT t FROM Transaction t WHERE t.recurring = true " +
+            "AND (t.nextDueDate IS NULL OR t.nextDueDate <= :date) ORDER BY t.nextDueDate ASC")
+    List<Transaction> findRecurringTransactionsDueBy(@Param("date") LocalDate date);
 
     //More efficient than using MONTH and YEAR filters
     @Query(value ="SELECT t FROM Transaction t WHERE (t.userAccount.id = :userId AND t.transactionDate >=:startDate AND t.transactionDate < :endDate AND t.category.transactionType = com.MrSurenK.SpendCentsBackend.model.TransactionType.EXPENSE) ORDER BY t.amount DESC")

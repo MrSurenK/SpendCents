@@ -9,6 +9,7 @@ import com.MrSurenK.SpendCentsBackend.model.Transaction;
 import com.MrSurenK.SpendCentsBackend.repository.CategoryRepo;
 import com.MrSurenK.SpendCentsBackend.repository.TransactionRepo;
 import com.MrSurenK.SpendCentsBackend.repository.UserAccountRepo;
+import com.MrSurenK.SpendCentsBackend.util.RecurringDateCalculator;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,11 @@ import java.util.UUID;
 @Slf4j
 public class TransactionService {
 
+    /**
+     * Upper bound on catch-up rows per template. Prevents a corrupt/very old due
+     * date from generating an unbounded number of transactions in one run.
+     */
+    private static final int MAX_CATCH_UP_TRANSACTIONS_PER_TEMPLATE = 120;
 
     private final TransactionRepo transactionRepo;
 
@@ -56,11 +62,13 @@ public class TransactionService {
         newItem.setCategory(cat);
         LocalDate txnDate = transactionRequestDto.getDate();
         newItem.setTransactionDate(txnDate);
-        newItem.setRecurring(transactionRequestDto.getRecurring() != null ? transactionRequestDto.getRecurring(): false);
 
-        if(transactionRequestDto.getRecurring()==true){
-            //Add 1 mth to due date field
-            newItem.setNextDueDate(txnDate.plusMonths(1));
+        boolean isRecurring = Boolean.TRUE.equals(transactionRequestDto.getRecurring());
+        newItem.setRecurring(isRecurring);
+
+        if(isRecurring){
+            //First occurrence is due one month after the transaction date
+            newItem.setNextDueDate(RecurringDateCalculator.firstDueDate(txnDate));
         }
 
         //Get userAccount from Security
@@ -119,12 +127,7 @@ public class TransactionService {
             currTransaction.setAmount(dto.getAmount());
         }
         if(dto.getDate() != null){
-            LocalDate newDate = dto.getDate();
-            currTransaction.setTransactionDate(newDate);
-            //Check if recurring is true in entity and if so update the next Due Date as well
-            if(currTransaction.getRecurring() == true){
-                currTransaction.setNextDueDate(newDate.plusMonths(1));
-            }
+            currTransaction.setTransactionDate(dto.getDate());
         }
         if(dto.getTitle() != null){
             currTransaction.setTitle(dto.getTitle());
@@ -134,17 +137,23 @@ public class TransactionService {
         }
         if(dto.getRecurring() != null){
             currTransaction.setRecurring(dto.getRecurring());
-            //remove next due date if recurring changed to false
-            if(dto.getRecurring() == false){
-                if(!(currTransaction.getNextDueDate() == null)){
-                    currTransaction.setNextDueDate(null);
-                }
-            }
         }
         if(dto.getCategoryId() != null){
             Category newCat = categoryRepo.getValidCat(userId, dto.getCategoryId()).orElseThrow(()
                     -> new EntityNotFoundException("Category not found"));
             currTransaction.setCategory(newCat);
+        }
+
+        //Keep nextDueDate consistent with the recurring flag. Initialise it when
+        //recurring was just switched on (or when repairing a legacy row that has
+        //no due date), but do not reset an existing schedule for unrelated edits.
+        if(Boolean.TRUE.equals(currTransaction.getRecurring())){
+            if(dto.getDate() != null || currTransaction.getNextDueDate() == null){
+                currTransaction.setNextDueDate(
+                        RecurringDateCalculator.firstDueDate(currTransaction.getTransactionDate()));
+            }
+        } else {
+            currTransaction.setNextDueDate(null);
         }
 
         //Update lastUpdated field
@@ -167,24 +176,62 @@ public class TransactionService {
     public void generateNewRecurringTransactions(){
         LocalDate today = LocalDate.now();
 
-        List<Transaction> templatesDueToday = transactionRepo.findByRecurringTrueAndNextDueDate(today);
+        List<Transaction> dueTemplates = transactionRepo.findRecurringTransactionsDueBy(today);
+        int generatedTotal = 0;
 
-        for(Transaction template: templatesDueToday){
+        for(Transaction template: dueTemplates){
 
-            Transaction copy = new Transaction();
-            copy.setParentTransaction(template);
-            copy.setUserAccount(template.getUserAccount());
-            copy.setAmount(template.getAmount());
-            copy.setCategory(template.getCategory());
-            copy.setTransactionDate(today);
-            copy.setRecurring(false); //copies shd never be recurring to prevent infiinite cascade of copies
-            copy.setLastUpdated(LocalDateTime.now());
-            copy.setRemarks(template.getRemarks());
+            LocalDate anchorDate = template.getTransactionDate();
+            LocalDate dueDate = template.getNextDueDate();
 
-            transactionRepo.save(copy);
+            if(dueDate == null){
+                //Legacy row: recurring was switched on without a due date being set.
+                dueDate = RecurringDateCalculator.firstDueDate(anchorDate);
+                log.info("Initialised missing nextDueDate for recurring template {}", template.getId());
+            }
 
-            template.setNextDueDate(today.plusMonths(1));
+            int generatedForTemplate = 0;
+
+            //Catch up every missed month, not only the one that is due today.
+            while(!dueDate.isAfter(today)
+                    && generatedForTemplate < MAX_CATCH_UP_TRANSACTIONS_PER_TEMPLATE){
+
+                Transaction copy = new Transaction();
+                copy.setParentTransaction(template);
+                copy.setUserAccount(template.getUserAccount());
+                copy.setAmount(template.getAmount());
+                copy.setCategory(template.getCategory());
+                copy.setTitle(template.getTitle()); //title is NOT NULL in the database
+                copy.setRemarks(template.getRemarks());
+                copy.setTransactionDate(dueDate); //the date it was due, not the run date
+                copy.setRecurring(false); //copies must never be recurring or they would cascade
+                copy.setLastUpdated(LocalDateTime.now());
+
+                transactionRepo.save(copy);
+                generatedForTemplate++;
+                generatedTotal++;
+
+                dueDate = RecurringDateCalculator.nextMonthlyDueDate(anchorDate, dueDate);
+            }
+
+            //Safety valve for pathological due dates: stop creating rows and move
+            //the template to its next future occurrence.
+            if(!dueDate.isAfter(today)){
+                log.warn("Recurring template {} is more than {} months overdue; " +
+                                "skipping ahead without generating further copies",
+                        template.getId(), MAX_CATCH_UP_TRANSACTIONS_PER_TEMPLATE);
+                while(!dueDate.isAfter(today)){
+                    dueDate = RecurringDateCalculator.nextMonthlyDueDate(anchorDate, dueDate);
+                }
+            }
+
+            template.setNextDueDate(dueDate);
             transactionRepo.save(template);
+        }
+
+        if(generatedTotal > 0){
+            log.info("Generated {} recurring transaction(s) from {} due template(s)",
+                    generatedTotal, dueTemplates.size());
         }
     }
 
