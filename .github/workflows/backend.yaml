@@ -1,57 +1,67 @@
 name: backend deployment
 
 on:
- push:
-  branches:
-   - main
-  paths:
-   - "SpendSense-BackEnd/**"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "SpendSense-BackEnd/**"
+      - ".github/workflows/backend.yaml"
+
+concurrency:
+  group: spendcents-backend-prod
 
 jobs:
- deploy:
-  environment: Prod
-  runs-on: ubuntu-latest
-  steps:
-   - uses: actions/checkout@v4
-   
-   - name: Setup Java
-     uses: actions/setup-java@v4
-     with: 
-      distribution: temurin
-      java-version: 21
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    environment: Prod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-   - name: Build backend
-     run: |
-      cd SpendSense-BackEnd
-      ./mvnw clean package -DskipTests
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
 
-   - name: Copy JAR to EC2
-     uses: appleboy/scp-action@v0.1.7
-     with: 
-      host: ${{ secrets.EC2_HOST }}
-      username: ubuntu
-      key: ${{ secrets.EC2_SSH_KEY }}
-      source: "SpendSense-BackEnd/target/app.jar"
-      strip_components: 2
-      target: "/home/ubuntu/apps/SpendCents/"
+      - name: Build backend
+        working-directory: SpendSense-BackEnd
+        run: ./mvnw clean package -DskipTests
 
-   - name: Copy Infra config to EC2
-     uses: appleboy/scp-action@v0.1.7
-     with: 
-      host: ${{ secrets.EC2_HOST }}
-      username: ubuntu
-      key: ${{ secrets.EC2_SSH_KEY }}
-      source: SpendSense-BackEnd/Dockerfile,SpendSense-BackEnd/compose.yaml
-      strip_components: 1
-      target: "/home/ubuntu/apps/SpendCents/"
+      - name: Stage deployment files
+        working-directory: SpendSense-BackEnd
+        run: |
+          mkdir -p ../deploy/nginx
+          cp target/app.jar Dockerfile compose.yaml .dockerignore ../deploy/
+          cp compose.lightsail.yaml ../deploy/compose.override.yaml
+          cp nginx/default.conf ../deploy/nginx/
 
-   - name: Rebuild backend on EC2
-     uses: appleboy/ssh-action@v1.0.3
-     with:
-      host: ${{ secrets.EC2_HOST }}
-      username: ubuntu 
-      key: ${{ secrets.EC2_SSH_KEY }}
-      script: |
-        cd /home/ubuntu/apps/SpendCents/
-        docker compose down
-        docker compose up -d
+      - name: Copy deployment files to Lightsail
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ubuntu
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          fingerprint: ${{ vars.LIGHTSAIL_HOST_FINGERPRINT }}
+          source: deploy
+          strip_components: 1
+          overwrite: true
+          target: /home/ubuntu/apps/SpendCents/
+
+      - name: Deploy on Lightsail
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ubuntu
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          fingerprint: ${{ vars.LIGHTSAIL_HOST_FINGERPRINT }}
+          script: |
+            set -eu
+            cd /home/ubuntu/apps/SpendCents
+            test -s .env || { echo 'Create the server .env before deploying.' >&2; exit 1; }
+            docker compose config --quiet
+            docker compose run --rm --no-deps nginx nginx -t
+            docker compose up -d --build --wait --wait-timeout 150
+            docker compose exec -T nginx nginx -s reload
