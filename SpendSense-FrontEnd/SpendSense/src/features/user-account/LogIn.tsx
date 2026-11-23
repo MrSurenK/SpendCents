@@ -1,8 +1,7 @@
-import Button from "../../components/btn/Button.tsx";
-import InputBox from "../../components/input-box/InputBox";
 import styles from "./LogIn.module.css";
-import { NavLink, useNavigate } from "react-router";
-import { useEffect, useState } from "react";
+import auth from "./Registration.module.css";
+import { Link, useNavigate } from "react-router";
+import { useState } from "react";
 import { useLoginMutation } from "../../redux/rtk-queries/authService.ts";
 import { useAppDispatch } from "../../hooks/reduxHooks.ts";
 import { loginState, type LoginPayload } from "../../redux/slices/authSlice.ts";
@@ -23,8 +22,8 @@ function LogIn() {
     description: string;
   }
 
-  function isBackendError(obj: any): obj is BackendError {
-    return obj && typeof obj.description === "string";
+  function isBackendError(obj: unknown): obj is BackendError {
+    return typeof obj === "object" && obj !== null && "description" in obj && typeof obj.description === "string";
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -36,7 +35,7 @@ function LogIn() {
     }));
   };
 
-  const [login, { data, error, isLoading, isSuccess }] = useLoginMutation();
+  const [login, { error, isLoading }] = useLoginMutation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,73 +63,36 @@ function LogIn() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (isSuccess && data) {
-      //update redux login state
-
-      const userInfo: LoginPayload = {
-        userId: data.userId,
-        username: data.username,
-        lastLogin: new Date(data.lastLogin).toISOString(),
-      };
-
-      dispatch(loginState(userInfo));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSuccess, data, dispatch]);
-
-  //create Sign in form
   return (
-    <>
-      <div className={styles.browserContainer}>
-        <form className={styles.card} onSubmit={handleSubmit}>
-          {data && <div style={{ color: "green" }}>{data.message}</div>}
-          {error && "data" in error && isBackendError(error.data) && (
-            <div style={{ color: "red" }}>
-              <div>{error.data.description}</div>
-            </div>
+    <section className={`${auth.page} ${styles.page}`}>
+      <div className={`${auth.card} ${styles.card}`}>
+        <header>
+          <p className={auth.brand}>SpendCents</p>
+          <h1>Sign in</h1>
+        </header>
+        <form className={`${auth.form} ${styles.form}`} onSubmit={handleSubmit} aria-busy={isLoading}>
+          <label>
+            Username
+            <input name="username" autoComplete="username" required onChange={handleChange} />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autoComplete="current-password" required onChange={handleChange} />
+          </label>
+          {error && (
+            <p role="alert">
+              {"data" in error && isBackendError(error.data)
+                ? error.data.description
+                : "Couldn’t sign in. Please try again."}
+            </p>
           )}
-          <div className={`${styles.spacing} ${styles.signIn}`}>
-            <span>Sign In</span>
-          </div>
-          <div>
-            <div className={styles.fieldsGap}>
-              <label className={styles.labels}>Username</label>
-              <InputBox
-                name="username"
-                size="md"
-                type="text"
-                required={true}
-                onChange={handleChange}
-              ></InputBox>
-            </div>
-            <div className={styles.fieldsGap}>
-              <label className={styles.labels}>Password</label>
-              <InputBox
-                name="password"
-                type="password"
-                size="md"
-                required={true}
-                onChange={handleChange}
-              ></InputBox>
-            </div>
-          </div>
-          <div className={styles.bottomElements}>
-            <div>
-              <Button text="Sign In" size="sm" disabled={isLoading}></Button>
-            </div>
-            <div className={styles.spacing}>
-              <nav>
-                <NavLink className={styles.link} to="/register">
-                  Not a member? Sign up here!
-                </NavLink>
-              </nav>
-            </div>
-          </div>
+          <button type="submit" disabled={isLoading}>
+            {isLoading ? "Signing in…" : "Sign in"}
+          </button>
         </form>
-        <div className={styles.background}></div>
+        <p className={auth.footer}>New to SpendCents? <Link to="/register">Create an account</Link></p>
       </div>
-    </>
+    </section>
   );
 }
 

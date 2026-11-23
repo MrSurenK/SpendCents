@@ -36,7 +36,6 @@ export const authSlice = createSlice({
       state.isLoggedIn = true;
     },
     logoutState: (state) => {
-      //call logout endpoint and set fields to null and logIn status to false
       state.userId = null;
       state.username = null;
       state.lastLogIn = null;

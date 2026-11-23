@@ -1,8 +1,6 @@
 import styles from "./Registration.module.css";
-import InputBox from "../../components/input-box/InputBox";
-import Button from "../../components/btn/Button";
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { useAppDispatch } from "../../hooks/reduxHooks";
 import { loginState, type LoginPayload } from "../../redux/slices/authSlice";
 
@@ -124,7 +122,7 @@ function Registration() {
   const checkPasswordSize = (): boolean => {
     const size = formData.password.length;
     if (size < 8) {
-      setPassSizeError("Password has to be a minmum of 8 characters");
+      setPassSizeError("Use at least 8 characters for your password.");
       return false;
     }
     setPassSizeError(null);
@@ -168,16 +166,16 @@ function Registration() {
       setRequiredCheck(null);
     }
 
-    let payload: Payload = formData;
-    if (checkPasswordMatch() && checkPasswordSize()) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { matchPassword, ...restOfFields } = formData;
-      payload = {
-        ...restOfFields,
-        dob: formData.dob.split("-").reverse().join("-"),
-      };
-      // console.log(payload);
-    }
+    if (!checkPasswordMatch() || !checkPasswordSize()) return;
+    const payload: Payload = {
+      email: formData.email,
+      userName: formData.userName,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      occupation: formData.occupation,
+      password: formData.password,
+      dob: formData.dob.split("-").reverse().join("-"),
+    };
 
     const options: RequestInit = {
       method: "POST",
@@ -199,133 +197,57 @@ function Registration() {
   };
 
   return (
-    <>
-      <div>
-        {/* Spinner overlay */}
-        {loading && (
-          <div className={styles.loadingOverlay}>
-            <div className={styles.loader}></div>
-          </div>
-        )}
-        <div className={`${styles.formContainer} ${styles.buttonPos}`}>
-          <h1 className={`${styles.header}`}>Registration</h1>
-          <form className={styles.form}>
-            {requiredCheck && <p style={{ color: "red" }}>{requiredCheck}</p>}
-            {submitError && (
-              <p style={{ color: "red" }}>{submitError.message}</p>
-            )}
-            <div>
-              <label>
-                Email<span className={styles.required}>*</span>
-              </label>
-              <InputBox
-                size="md"
-                type="text"
-                name="email"
-                onChange={handleChange}
-                required={true}
-              ></InputBox>
-            </div>
-            <div>
-              <label>
-                Username <span className={styles.required}>*</span>
-              </label>
-              <InputBox
-                size="md"
-                type="text"
-                name="userName"
-                onChange={handleChange}
-                required={true}
-              ></InputBox>
-            </div>
-            <div>
-              <label>
-                First Name<span className={styles.required}>*</span>
-              </label>
-              <InputBox
-                size="md"
-                type="text"
-                name="firstName"
-                onChange={handleChange}
-                required={true}
-              ></InputBox>
-            </div>
-            <div>
-              <label>
-                Last Name<span className={styles.required}>*</span>
-              </label>
-              <InputBox
-                size="md"
-                type="text"
-                name="lastName"
-                onChange={handleChange}
-                required={true}
-              ></InputBox>
-            </div>
-            <div>
-              <label>
-                Occupation<span className={styles.required}>*</span>
-              </label>
-              <InputBox
-                size="md"
-                type="text"
-                name="occupation"
-                onChange={handleChange}
-                required={true}
-              ></InputBox>
-            </div>
-            <div className={`${styles.dob}`}>
-              <label>
-                Date of Birth<span className={styles.required}>*</span>
-              </label>
-              <InputBox
-                size="sm"
-                type="date"
-                name="dob"
-                onChange={handleChange}
-                required={true}
-              ></InputBox>
-            </div>
-            <div>
-              <label>
-                Password<span className={styles.required}>*</span>
-              </label>
-              <InputBox
-                size="md"
-                type="password"
-                name="password"
-                onChange={handleChange}
-                onBlur={handleBlur}
-                required={true}
-              ></InputBox>
-              {passSizeError && <p style={{ color: "red" }}>{passSizeError}</p>}
-            </div>
-            <div>
-              <label>
-                Repeat password<span className={styles.required}>*</span>
-              </label>
-              <InputBox
-                size="md"
-                type="password"
-                name="matchPassword"
-                onChange={handleChange}
-                onBlur={handleBlur}
-                required={true}
-              ></InputBox>
-              {matchError && <p style={{ color: "red" }}>{matchError}</p>}
-            </div>
-          </form>
-          <div className={`${styles.buttonPos}`}>
-            <Button
-              text="Submit"
-              size="sm"
-              type="submit"
-              onClick={handleSubmit}
-            ></Button>
-          </div>
-        </div>
+    <section className={styles.page}>
+      <div className={styles.card}>
+        <header>
+          <p className={styles.brand}>SpendCents</p>
+          <h1>Create your account</h1>
+        </header>
+        <form className={styles.form} onSubmit={handleSubmit} aria-busy={loading}>
+          <label>
+            First name
+            <input name="firstName" type="text" autoComplete="given-name" required onChange={handleChange} />
+          </label>
+          <label>
+            Last name
+            <input name="lastName" type="text" autoComplete="family-name" required onChange={handleChange} />
+          </label>
+          <label>
+            Email
+            <input name="email" type="email" autoComplete="email" required onChange={handleChange} />
+          </label>
+          <label>
+            Username
+            <input name="userName" type="text" autoComplete="username" required onChange={handleChange} />
+          </label>
+          <label>
+            Occupation
+            <input name="occupation" type="text" required onChange={handleChange} />
+          </label>
+          <label>
+            Date of birth
+            <input name="dob" type="date" autoComplete="bday" required onChange={handleChange} />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autoComplete="new-password" required onChange={handleChange} onBlur={handleBlur} />
+            {passSizeError && <span role="alert">{passSizeError}</span>}
+          </label>
+          <label>
+            Confirm password
+            <input name="matchPassword" type="password" autoComplete="new-password" required onChange={handleChange} onBlur={handleBlur} />
+            {matchError && <span role="alert">{matchError}</span>}
+          </label>
+          {(requiredCheck || submitError) && (
+            <p role="alert">{requiredCheck || submitError?.message}</p>
+          )}
+          <button disabled={loading} type="submit">
+            {loading ? "Please wait…" : "Create account"}
+          </button>
+        </form>
+        <p className={styles.footer}>Already have an account? <Link to="/">Sign in</Link></p>
       </div>
-    </>
+    </section>
   );
 }
 

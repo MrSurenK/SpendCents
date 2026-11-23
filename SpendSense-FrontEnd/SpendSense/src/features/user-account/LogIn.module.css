@@ -1,91 +1,13 @@
-/* Anything larger than ipad */
-@media screen and (min-width: 1368px) {
-  .link {
-    font-size: 0.75rem;
-  }
-
-  .browserContainer {
-    display: flex;
-    flex-direction: row;
-    justify-content: flex-end;
-    height: 100vh;
-    width: 100%;
-  }
-
-  .card {
-    display: flex;
-    justify-content: center;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-  }
-
-  .background {
-    background-image: url(../../assets/cash.jpg);
-    background-size: cover;
-    background-position: center;
-    width: 100%;
-  }
-}
-
-/* Mobile phones and Ipads */
-@media screen and (max-width: 1368px) {
-  .background {
-    background-image: url(../../assets/cash.jpg);
-    background-size: auto;
-    background-position: center;
-    width: 100%;
-  }
-
-  .card {
-    width: 95vw;
-    background: #ffffff;
-    border: 4px solid #000000;
-    box-shadow: 8px 8px 0 #000;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-  }
-
-  .labels {
-    background-color: whitesmoke;
-  }
-  .fieldsGap {
-    margin-bottom: 5%;
-    margin-left: 0.5rem;
-  }
-}
-
-.bottomElements {
+.page {
   display: flex;
   flex-direction: column;
-  align-items: center;
 }
 
-.spacing {
-  margin-bottom: 5%;
+.card {
+  width: min(100%, 28rem);
+  flex: none;
 }
 
-.signIn {
-  font-family: "Work Sans", sans-serif;
-  text-transform: uppercase;
-  font-weight: 900;
-  font-size: 2rem;
-  background-image: url("data:image/svg+xml,%3Csvg width='100' height='64' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cg clip-path='url(%23a)'%3E%3Cpath d='M-17 30.5C-1 22 72-4 54 13 37.9 28.2-2.5 57.5 16 55.5s72-29 104-40' stroke='%2300FDCF' stroke-width='10'/%3E%3C/g%3E%3Cdefs%3E%3CclipPath id='a'%3E%3Cpath fill='%23fff' d='M0 0h100v64H0z'/%3E%3C/clipPath%3E%3C/defs%3E%3C/svg%3E%0A");
-  background-size: auto 100%;
-  background-repeat: round;
-  background-position: 0em;
-}
-
-.fieldsContainer {
-  display: inline-block;
-}
-
-.fieldsGap {
-  margin-bottom: 5%;
-}
-
-.labels {
-  background-color: whitesmoke;
+.card .form {
+  grid-template-columns: minmax(0, 1fr);
 }

@@ -23,13 +23,13 @@ type LogOutResponse = {
 export const authApi = createApi({
   reducerPath: "authApi",
   baseQuery: fetchBaseQuery({
-    baseUrl: `${import.meta.env.VITE_API_BASE_URL}/auth/`,
+    baseUrl: import.meta.env.VITE_API_BASE_URL,
   }),
   endpoints: (build) => ({
     //the query accepts sign in credentials of type SignInCredentials and returns a message of type Message
     login: build.mutation<LoginResponse, SignInCredentials>({
       query: (credentials) => ({
-        url: "login",
+        url: "/auth/login",
         method: "POST",
         body: credentials,
         headers: { "Content-Type": "application/json" },
@@ -38,7 +38,7 @@ export const authApi = createApi({
     }),
     logout: build.mutation<LogOutResponse, void>({
       query: () => ({
-        url: "logout",
+        url: "/logout",
         method: "POST",
         credentials: "include",
       }),

@@ -1,6 +1,11 @@
-import { NavLink, useLocation } from "react-router";
+import { NavLink, useLocation, useNavigate } from "react-router";
 import styles from "./navBar.module.css";
 import { useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useLogoutMutation } from "../../redux/rtk-queries/authService";
+import { dashboardApi } from "../../redux/rtk-queries/dashboardService";
+import { transactionApi } from "../../redux/rtk-queries/transactionService";
+import { logoutState, selectAuthStatus } from "../../redux/slices/authSlice";
 
 interface MenuItem {
   key: string | number;
@@ -38,25 +43,34 @@ export default function NavBar() {
         },
       ],
     },
-    {
-      key: 3,
-      mainMenu: "Account Management",
-      path: "settings",
-    },
   ];
 
   //State for managing selected menu item
   const [toggleTransMenu, setToggleTransMenu] = useState<boolean>(false);
 
   const location = useLocation();
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { isLoggedIn } = useSelector(selectAuthStatus);
+  const [logout, { isLoading, isError }] = useLogoutMutation();
+
+  async function handleLogout() {
+    const result = await logout();
+    if (result.error) return;
+
+    dispatch(logoutState());
+    navigate("/", { replace: true });
+    dispatch(dashboardApi.util.resetApiState());
+    dispatch(transactionApi.util.resetApiState());
+  }
 
   const currPath = location.pathname; //gives curr path name
   const mainSegment = currPath.split("/")[1]; // first path segment
 
   return (
     <div className={styles.sideBar}>
-      <h1 id={styles.main}>Main Menu</h1>
-      <nav className={styles.nav}>
+      <h2 id={styles.main}>SpendCents</h2>
+      <nav className={styles.nav} aria-labelledby={styles.main}>
         <ul className={styles.menuItems}>
           {menu.map((item) => {
             // Determine if this main menu should be active
@@ -69,6 +83,8 @@ export default function NavBar() {
                 {item.subMenu ? (
                   <>
                     <button
+                      type="button"
+                      aria-expanded={toggleTransMenu}
                       onClick={() => setToggleTransMenu((prev) => !prev)}
                       className={`${styles.dropDownBtn} ${
                         isMainActive ? styles.active : ""
@@ -114,6 +130,23 @@ export default function NavBar() {
           })}
         </ul>
       </nav>
+      {isLoggedIn && (
+        <div className={styles.sidebarFooter}>
+          <button
+            type="button"
+            className={styles.logoutButton}
+            disabled={isLoading}
+            onClick={handleLogout}
+          >
+            {isLoading ? "Logging out…" : "Log out"}
+          </button>
+          {isError && (
+            <p className={styles.logoutError} role="alert">
+              Couldn’t log out. Please try again.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
