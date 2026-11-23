@@ -37,6 +37,7 @@ jobs:
           cp target/app.jar Dockerfile compose.yaml .dockerignore ../deploy/
           cp compose.lightsail.yaml ../deploy/compose.override.yaml
           cp nginx/default.conf ../deploy/nginx/
+          cp src/main/resources/data.sql ../deploy/data.sql
 
       - name: Copy deployment files to Lightsail
         uses: appleboy/scp-action@v0.1.7

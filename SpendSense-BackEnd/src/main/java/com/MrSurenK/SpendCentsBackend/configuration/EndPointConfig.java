@@ -61,8 +61,7 @@ public class EndPointConfig {
         corsConfiguration.setAllowedOrigins(List.of(
                 "http://127.0.0.1:5173",
                 "http://localhost:5173",
-                "https://spendcents.org",
-                "https://www.spendcents.org"));
+                "https://spendcents.surenk.dev"));
         corsConfiguration.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
         corsConfiguration.setAllowedHeaders(List.of("Authorization","Content-Type","Accept"));
         corsConfiguration.setAllowCredentials(true);

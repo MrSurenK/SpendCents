@@ -1,6 +1,8 @@
 services:
   app:
     profiles: !reset []
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
     ports: !reset []
     restart: unless-stopped
     depends_on:
