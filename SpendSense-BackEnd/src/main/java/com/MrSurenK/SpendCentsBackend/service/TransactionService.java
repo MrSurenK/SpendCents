@@ -118,6 +118,13 @@ public class TransactionService {
     }
 
 
+    private LocalDate nextDueAfterRecordedOccurrences(Transaction template) {
+        LocalDate anchor = template.getTransactionDate();
+        LocalDate latest = transactionRepo.latestOccurrenceDate(template.getId());
+        LocalDate lastMonthToSkip = latest != null && latest.isAfter(anchor) ? latest : anchor;
+        return RecurringDateCalculator.nextMonthlyDueDate(anchor, lastMonthToSkip);
+    }
+
     public Transaction editTransaction(EditTransactionDto dto, int userId, UUID transactionId){
         //Get transaction that is being edited
         Transaction currTransaction = transactionRepo.findById(transactionId)
@@ -126,7 +133,8 @@ public class TransactionService {
         if(dto.getAmount() != null){
             currTransaction.setAmount(dto.getAmount());
         }
-        if(dto.getDate() != null){
+        boolean dateChanged = dto.getDate() != null && !dto.getDate().equals(currTransaction.getTransactionDate());
+        if(dateChanged){
             currTransaction.setTransactionDate(dto.getDate());
         }
         if(dto.getTitle() != null){
@@ -148,9 +156,9 @@ public class TransactionService {
         //recurring was just switched on (or when repairing a legacy row that has
         //no due date), but do not reset an existing schedule for unrelated edits.
         if(Boolean.TRUE.equals(currTransaction.getRecurring())){
-            if(dto.getDate() != null || currTransaction.getNextDueDate() == null){
+            if(dateChanged || currTransaction.getNextDueDate() == null){
                 currTransaction.setNextDueDate(
-                        RecurringDateCalculator.firstDueDate(currTransaction.getTransactionDate()));
+                        nextDueAfterRecordedOccurrences(currTransaction));
             }
         } else {
             currTransaction.setNextDueDate(null);
@@ -186,7 +194,7 @@ public class TransactionService {
 
             if(dueDate == null){
                 //Legacy row: recurring was switched on without a due date being set.
-                dueDate = RecurringDateCalculator.firstDueDate(anchorDate);
+                dueDate = nextDueAfterRecordedOccurrences(template);
                 log.info("Initialised missing nextDueDate for recurring template {}", template.getId());
             }
 

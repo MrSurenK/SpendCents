@@ -45,6 +45,9 @@ public interface TransactionRepo extends JpaRepository<Transaction, UUID>, JpaSp
             "AND (t.nextDueDate IS NULL OR t.nextDueDate <= :date) ORDER BY t.nextDueDate ASC")
     List<Transaction> findRecurringTransactionsDueBy(@Param("date") LocalDate date);
 
+    @Query("SELECT MAX(t.transactionDate) FROM Transaction t WHERE t.parentTransaction.id = :templateId")
+    LocalDate latestOccurrenceDate(@Param("templateId") UUID templateId);
+
     //More efficient than using MONTH and YEAR filters
     @Query(value ="SELECT t FROM Transaction t WHERE (t.userAccount.id = :userId AND t.transactionDate >=:startDate AND t.transactionDate < :endDate AND t.category.transactionType = com.MrSurenK.SpendCentsBackend.model.TransactionType.EXPENSE) ORDER BY t.amount DESC")
     List<Transaction> findTopFiveByAmount(@Param("userId") Integer userId, @Param("startDate") LocalDate startDate,

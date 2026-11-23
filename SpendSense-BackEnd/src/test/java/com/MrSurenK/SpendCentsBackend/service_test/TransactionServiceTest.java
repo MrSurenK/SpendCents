@@ -263,6 +263,31 @@ public class TransactionServiceTest {
             assertEquals(RecurringDateCalculator.firstDueDate(newDate), txn.getNextDueDate());
         }
 
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.CsvSource({
+                "2025-03-10,2025-04-11",
+                "2025-02-10,2025-03-11"
+        })
+        void editedScheduleStartsAfterLatestRecordedMonth(LocalDate latest, LocalDate expected) {
+            UUID id = UUID.randomUUID();
+            Transaction template = new Transaction();
+            template.setId(id);
+            template.setTransactionDate(LocalDate.of(2025, 1, 10));
+            template.setRecurring(true);
+            template.setNextDueDate(latest.plusMonths(1));
+            when(transactionRepo.findById(id)).thenReturn(Optional.of(template));
+            when(transactionRepo.latestOccurrenceDate(id)).thenReturn(latest);
+
+            EditTransactionDto edit = new EditTransactionDto();
+            edit.setDate(LocalDate.of(2025, 1, 11));
+            transactionService.editTransaction(edit, 1, id);
+            assertEquals(expected, template.getNextDueDate());
+
+            transactionService.editTransaction(edit, 1, id);
+            verify(transactionRepo, times(1)).latestOccurrenceDate(id);
+            assertEquals(expected, template.getNextDueDate());
+        }
+
         @Test
         @DisplayName("Unrelated edits do not reset an existing recurring schedule")
         void editTransaction_unrelatedEditKeepsNextDueDate() {
