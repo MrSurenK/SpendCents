@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.MrSurenK</groupId>
 	<artifactId>SpendCents-Backend</artifactId>
-	<version>0.0.2</version>
+	<version>0.0.3</version>
 	<name>SpendCents-Backend</name>
 	<description>Expense tracker application for daily use</description>
 	<url/>

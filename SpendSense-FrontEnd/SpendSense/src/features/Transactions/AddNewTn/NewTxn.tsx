@@ -211,7 +211,6 @@ export default function NewTxn() {
               <textarea
                 name="remarks"
                 className={styles.remarks}
-                placeholder="Optional notes..."
                 rows={2}
                 onChange={handleInputChange}
               />

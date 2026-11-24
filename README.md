@@ -10,26 +10,36 @@ Key Features:
 2. Visualisation of spending habits 
 3. User Authentication
 
+## Screenshots
 
-<h2> Screens </h2>
+### Login
 
-__Login page: User may login their credentials in this page__
-![Login Page](./screens/Login%20Page.png)
+![SpendCents login page](./screens/Login_Page.png)
 
+### Registration
 
-__Registration Page: New users may register a new account here__
-![Registration Page](./screens/Registration%20page.png)
+![SpendCents sign-up page](./screens/Sign_Up_Page.png)
 
-__Dashboard: User spending data is shown in this page__
-![Dashboard](./screens/Dashbaord%20with%20charts.png)
+### Dashboard
 
-__Add New Transaction: New transaction UI - user may also create a new custom category__
-![New Transaction Page](./screens/New%20transaction%20form.png)
-![Custom Categories](./screens/Add%20Custom%20Category.png)
+![Dashboard with spending charts](./screens/Dashboard.png)
 
-__Transactions Table: User may view all transactions here and perform some CRUD operations. User may also filter and apply n number of sorting options available__
-![Transactions Table](./screens/All%20transactions%20with%20filters.png)
-![View Single Transaction](./screens/Modal%20to%20view%20all%20details%20of%20a%20transaction.png)
+### Add a custom category
 
-__Edit Form: User may edit transactions that have been placed__
-![Edit Form](./screens/Edit%20Transaction.png)
+![Add New Category dialog on the transaction form](./screens/Add_New_Category.png)
+
+### Past transactions
+
+![Past transactions table](./screens/Past_Transactions.png)
+
+### View a transaction
+
+![Transaction details dialog](./screens/View_Transaction.png)
+
+### Edit a transaction
+
+![Edit transaction form](./screens/Edit_Transaction.png)
+
+## Database schema
+
+![SpendCents entity relationship diagram](./screens/ERD.png)
