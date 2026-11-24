@@ -3,7 +3,7 @@
 
 *Stack : Java, Springboot, React, Typescript, Redux, Redis, MySQL and AWS*
 
-Check it out at: [spendcents.org](https://spendcents-surenk.dev)
+Check it out at: [spendcents-surenk.dev](https://spendcents-surenk.dev)
 
 Key Features: 
 1. CRUD functionality on expenses 
